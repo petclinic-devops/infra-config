@@ -1,0 +1,138 @@
+---
+- name: Check if cluster is already initialized
+  stat:
+    path: /etc/kubernetes/admin.conf
+  register: k8s_admin_conf
+
+- name: Initialize Kubernetes cluster
+  shell: |
+    kubeadm init \
+      --pod-network-cidr={{ pod_network_cidr }} \
+      --service-cidr={{ service_cidr }} \
+      --apiserver-advertise-address={{ ansible_default_ipv4.address }}
+  register: kubeadm_init
+  when: not k8s_admin_conf.stat.exists
+
+- name: Create .kube directory for root
+  file:
+    path: /root/.kube
+    state: directory
+    mode: '0755'
+
+- name: Copy admin.conf to root's kube config
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /root/.kube/config
+    remote_src: yes
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Create .kube directory for ubuntu user
+  file:
+    path: /home/ubuntu/.kube
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+
+- name: Copy admin.conf to ubuntu's kube config
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /home/ubuntu/.kube/config
+    remote_src: yes
+    owner: ubuntu
+    group: ubuntu
+    mode: '0644'
+
+- name: Get join token
+  shell: kubeadm token create --print-join-command
+  register: k8s_join_command
+  when: not k8s_admin_conf.stat.exists
+
+- name: Save join command to local file
+  copy:
+    content: "{{ k8s_join_command.stdout }}"
+    dest: "./k8s-join-command"
+  delegate_to: localhost
+  become: no
+  when: 
+    - k8s_join_command is defined
+    - k8s_join_command.stdout is defined
+    - not k8s_admin_conf.stat.exists
+
+- name: Check if Flannel is already installed
+  shell: kubectl get daemonset -n kube-flannel flannel-ds-amd64
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: flannel_exists
+  ignore_errors: yes
+
+- name: Install Flannel network plugin
+  shell: kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: flannel_exists.rc != 0
+
+- name: Wait for Flannel pods to be ready
+  shell: kubectl get pods -n kube-flannel --no-headers | grep -v Running | wc -l
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: flannel_not_ready
+  until: flannel_not_ready.stdout == "0"
+  retries: 20
+  delay: 15
+  ignore_errors: yes
+
+- name: Wait for all nodes to be ready
+  shell: kubectl get nodes --no-headers | awk '{print $2}' | grep -v Ready | wc -l
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: not_ready_nodes
+  until: not_ready_nodes.stdout == "0"
+  retries: 30
+  delay: 10
+
+- name: Wait for worker nodes to join and be ready
+  shell: kubectl get nodes --no-headers | grep -v master | grep Ready | wc -l
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: ready_workers
+  until: ready_workers.stdout|int >= {{ groups['workers']|length }}
+  retries: 30
+  delay: 10
+
+- name: Label worker nodes
+  shell: kubectl label node {{ hostvars[item]['ansible_hostname'] }} node-role.kubernetes.io/worker=worker --overwrite
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  loop: "{{ groups['workers'] }}"
+  ignore_errors: yes
+
+
+
+# roles/k8s-master/tasks/main.yml
+- name: Create restricted pod security policy
+  shell: kubectl apply -f https://raw.githubusercontent.com/kubernetes/website/main/content/en/examples/policy/restricted-psp.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  ignore_errors: yes
+
+- name: Apply default resource quotas
+  shell: |
+    kubectl create namespace production || true
+    kubectl apply -f - <<EOF
+    apiVersion: v1
+    kind: ResourceQuota
+    metadata:
+      name: compute-quota
+      namespace: production
+    spec:
+      hard:
+        requests.cpu: "1"
+        requests.memory: 1Gi
+        limits.cpu: "2"
+        limits.memory: 2Gi
+    EOF
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf

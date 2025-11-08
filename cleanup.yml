@@ -1,0 +1,66 @@
+---
+# =========================
+# Cleanup Kubernetes + Jenkins
+# =========================
+
+- name: Cleanup Kubernetes cluster
+  hosts: all
+  become: yes
+  tasks:
+    - name: Reset Kubernetes
+      shell: kubeadm reset -f
+      ignore_errors: yes
+    
+    - name: Remove Kubernetes directories
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/kubernetes
+        - /var/lib/kubelet
+        - /var/lib/etcd
+        - /etc/cni/net.d
+        - /opt/cni/bin
+    
+    - name: Clean iptables
+      shell: iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
+      ignore_errors: yes
+
+- name: Cleanup Jenkins server
+  hosts: jenkins
+  become: yes
+  tasks:
+    - name: Stop Jenkins service if running
+      service:
+        name: jenkins
+        state: stopped
+      ignore_errors: yes
+
+    - name: Uninstall Jenkins package
+      apt:
+        name: jenkins
+        state: absent
+        purge: yes
+
+    - name: Remove Jenkins repository and key
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/apt/sources.list.d/jenkins.list
+        - /usr/share/keyrings/jenkins-keyring.asc
+
+    - name: Remove Jenkins home, log, and config directories
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /var/lib/jenkins
+        - /var/log/jenkins
+        - /etc/default/jenkins
+        - /etc/init.d/jenkins
+
+    - name: Clean apt cache
+      apt:
+        autoclean: yes
+        autoremove: yes
