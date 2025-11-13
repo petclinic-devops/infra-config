@@ -62,7 +62,7 @@ ansible-playbook -i inventory/hosts.yml playbooks/04-setup-jenkins.yml
 Chạy toàn bộ tự động với script
 chmod +x deploy.sh
 ./deploy.sh
-
+*** Lưu ý: khi chạy lệnh "./deploy.sh" phải tạo thêm terminal để chạy lệnh song song nhằm mục đích join các worker vào node master chạy lệnh sau "ansible-playbook playbooks/03-setup-workers.yml"
 ✅ Kiểm tra kết quả
 
 Kiểm tra trạng thái Jenkins và Kubernetes cluster:
