@@ -79,3 +79,41 @@ Nếu muốn xóa hạ tầng hoặc reset node:
 
 ansible-playbook -i inventory/hosts.yml cleanup.yml
 
+---
+
+## 🎯 Lợi ích
+
+Việc triển khai Kubernetes Cluster cùng Jenkins bằng Ansible mang lại nhiều lợi ích:
+
+1. **Tự động hoá hoàn toàn**: 
+   - Các bước cài đặt, cấu hình Kubernetes và Jenkins được chạy tự động, giảm thiểu thao tác thủ công, tránh sai sót.
+2. **Tái sử dụng và mở rộng dễ dàng**:
+   - Playbook và roles có thể tái sử dụng cho nhiều môi trường hoặc mở rộng thêm node/master mới mà không cần viết lại.
+3. **Quản lý hạ tầng nhất quán**:
+   - Mọi server (master, worker, Jenkins) được cài đặt và cấu hình theo cùng một chuẩn, dễ kiểm soát.
+4. **Tiết kiệm thời gian triển khai**:
+   - Thay vì cài thủ công từng node, toàn bộ cluster và Jenkins có thể triển khai chỉ với vài lệnh.
+5. **Dễ bảo trì và nâng cấp**:
+   - Khi cần nâng cấp Kubernetes, Jenkins hoặc thay đổi cấu hình, chỉ cần chỉnh sửa playbook và chạy lại.
+6. **Giám sát và kiểm tra nhanh chóng**:
+   - Script `health.sh` giúp kiểm tra trạng thái cluster và Jenkins một cách nhanh chóng, đảm bảo môi trường luôn sẵn sàng.
+
+## 🏆 Kết quả đạt được
+
+Sau khi triển khai xong:
+
+- **Kubernetes Cluster**:
+  - Master và các Worker node hoạt động ổn định.
+  - Tất cả node đã join cluster thành công (`kubectl get nodes`).
+  - Các Pod hệ thống Kubernetes (CoreDNS, kube-proxy, metrics-server, ...) chạy bình thường (`kubectl get pods -A`).
+
+- **Jenkins Server**:
+  - Jenkins được cài đặt và chạy ổn định trên node chỉ định.
+  - Có thể truy cập Jenkins UI qua địa chỉ IP / port đã cấu hình.
+  - Sẵn sàng thực hiện các pipeline CI/CD cho dự án.
+
+- **Tự động hoá triển khai**:
+  - Playbook và script `deploy.sh` cho phép tái triển khai hoặc mở rộng cluster nhanh chóng.
+  - Script `cleanup.yml` giúp reset hoặc xóa hạ tầng dễ dàng khi cần.
+
+💡 **Tóm lại**: Hệ thống Kubernetes + Jenkins được triển khai nhanh chóng
